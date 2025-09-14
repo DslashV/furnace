@@ -1,8 +1,9 @@
-#include "export.h"
+#include "dialogExport.h"  // Furnace’s existing export dialog header
 #include "chips/sid.h"
 #include <fstream>
-#include <cstring>
 #include <vector>
+#include <string>
+#include <cstring>
 
 struct SIDWrite {
     uint32_t time;
@@ -27,38 +28,11 @@ struct PSIDHeader {
 
 // Minimal 6502 player
 static const uint8_t sidPlayer[] = {
-    0x85,0xFE,       // STA $FE
-    0xA2,0x00,       // LDX #$00
-    0x86,0xFB,       // STX $FB
-    0x86,0xFC,       // STX $FC
-    0x60,            // RTS
-
-    0xA0,0x00,       // LDY #$00
-    0xB1,0xFB,       // LDA ($FB),Y
-    0xC9,0xFF,       // CMP #$FF
-    0xF0,0x1C,       // BEQ DONE
-    0xAA,            // TAX
-    0xC8,            // INY
-
-    0xB1,0xFB,       // LDA ($FB),Y
-    0x85,0xFD,       // STA $FD
-    0xC8,            // INY
-    0xB1,0xFB,       // LDA ($FB),Y
-    0xA6,0xFD,       // LDX $FD
-    0x9D,0x00,0xD4,  // STA $D400,X
-    0xC8,            // INY
-    0xCA,            // DEX
-    0xD0,0xF4,       // BNE NEXTWRITE
-
-    0x98,            // TYA
-    0x18,            // CLC
-    0x65,0xFB,       // ADC $FB
-    0x85,0xFB,       // STA $FB
-    0x90,0x02,       // BCC SKIP
-    0xE6,0xFC,       // INC $FC
-    0x60,            // RTS
-
-    0x60             // DONE RTS
+    0x85,0xFE, 0xA2,0x00, 0x86,0xFB, 0x86,0xFC, 0x60,
+    0xA0,0x00, 0xB1,0xFB, 0xC9,0xFF, 0xF0,0x1C, 0xAA, 0xC8,
+    0xB1,0xFB, 0x85,0xFD, 0xC8, 0xB1,0xFB, 0xA6,0xFD, 0x9D,0x00,0xD4,
+    0xC8, 0xCA, 0xD0,0xF4, 0x98, 0x18, 0x65,0xFB, 0x85,0xFB, 0x90,0x02,
+    0xE6,0xFC, 0x60, 0x60
 };
 
 class ExporterSID : public Exporter {
@@ -70,6 +44,7 @@ public:
         return "Commodore 64 SID (.sid)";
     }
 
+    // Log SID writes
     virtual void log(uint8_t chipId, uint16_t addr, uint8_t data, uint32_t time) override {
         if (chipId == CHIP_SID && addr >= 0xD400 && addr <= 0xD418) {
             SIDWrite w;
@@ -80,17 +55,53 @@ public:
         }
     }
 
+    // Self-test log buffer for GUI
+    std::vector<std::string> sidLogBuffer;
+
+    void logGUI(const std::string& text) {
+        sidLogBuffer.push_back(text);
+        if (sidLogBuffer.size() > 1000)
+            sidLogBuffer.erase(sidLogBuffer.begin());
+    }
+
     virtual bool exportSong(Song* song, const std::string& filename,
                             const ExportConfig& cfg) override {
 
-        std::ofstream out(filename, std::ios::binary);
-        if (!out.is_open()) return false;
-
+        // === Automatic Self-Test (GUI) ===
+        sidLogBuffer.clear();
         int numSubsongs = (int)song->subsongs.size();
         if (numSubsongs < 1) numSubsongs = 1;
-
         int startSong = cfg.sidStartSong - 1;
         int endSong   = cfg.sidExportAll ? numSubsongs - 1 : startSong;
+
+        logGUI("=== SID Export Self-Test ===");
+        logGUI("Total subsongs: " + std::to_string(numSubsongs));
+        logGUI("Export range: " + std::to_string(startSong + 1) + " to " + std::to_string(endSong + 1));
+
+        for (int s = startSong; s <= endSong; s++) {
+            if (!cfg.sidExportAll && !cfg.sidSelectedSubsongs[s])
+                continue;
+
+            writes.clear();
+            song->selectSubsong(s);
+            song->renderAll();
+
+            logGUI("Subsong " + std::to_string(s + 1) + ": total writes = " + std::to_string(writes.size()));
+
+            for (size_t i = 0; i < writes.size() && i < 5; i++) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "  Frame %u: reg $%02X = $%02X",
+                         writes[i].time, writes[i].reg, writes[i].value);
+                logGUI(buf);
+            }
+            if (writes.size() > 5)
+                logGUI("  ... (" + std::to_string(writes.size() - 5) + " more writes)");
+        }
+        logGUI("=== End of Self-Test ===");
+
+        // === Write PSID file ===
+        std::ofstream out(filename, std::ios::binary);
+        if (!out.is_open()) return false;
 
         PSIDHeader header;
         memset(&header, 0, sizeof(header));
@@ -121,10 +132,6 @@ public:
             if (!cfg.sidExportAll && !cfg.sidSelectedSubsongs[s])
                 continue;
 
-            writes.clear();
-            song->selectSubsong(s);
-            song->renderAll();
-
             std::streampos dataPos = out.tellp();
             subsongOffsets[s - startSong] = (uint16_t)(dataPos - 0x1000);
 
@@ -153,8 +160,8 @@ public:
             out.put((offs >> 8) & 0xFF);
         }
         out.seekp(endPos);
-
         out.close();
+
         return true;
     }
 
