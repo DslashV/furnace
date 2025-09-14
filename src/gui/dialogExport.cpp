@@ -28,3 +28,13 @@ if (exporter->getName() == "Commodore 64 SID (.sid)") {
         ImGui::Checkbox(buf, &cfg.sidSelectedSubsongs[i]);
     }
 }
+
+if (!sidExporter.sidLogBuffer.empty()) {
+    ImGui::Separator();
+    ImGui::Text("SID Export Log:");
+    ImGui::BeginChild("SIDLog", ImVec2(0, 150), true, ImGuiWindowFlags_HorizontalScrollbar);
+    for (auto& line : sidExporter.sidLogBuffer) {
+        ImGui::TextUnformatted(line.c_str());
+    }
+    ImGui::EndChild();
+}
