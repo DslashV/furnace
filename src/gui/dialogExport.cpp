@@ -1,3 +1,7 @@
+struct ExportConfig {
+    // existing export options
+};
+
 if (exporter->getName() == "Commodore 64 SID (.sid)") {
     ImGui::Separator();
     ImGui::Text("SID Options");
