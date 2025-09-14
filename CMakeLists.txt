@@ -25,7 +25,7 @@ set(SYSTEM_SDL2_DEFAULT OFF)
 
 set(SOURCES
     src/main.cpp
-    src/dialogExport.cpp
+    src/gui/dialogExport.cpp
     src/export.h
     src/export_sid.cpp   # ✅ SID exporter added here
     # other source files
