@@ -23,6 +23,15 @@ set(USE_SDL2_DEFAULT ON)
 set(USE_SNDFILE_DEFAULT ON)
 set(SYSTEM_SDL2_DEFAULT OFF)
 
+set(SOURCES
+    src/main.cpp
+    src/dialogExport.cpp
+    src/export.h
+    src/export_sid.cpp   # ✅ SID exporter added here
+    # other source files
+)
+
+
 include(CheckIncludeFile)
 include(TestBigEndian)
 
